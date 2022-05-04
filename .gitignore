@@ -1,0 +1,8 @@
+# Project deps
+node_modules/
+
+# Config
+.vscode/
+
+# Built files
+/lib/
