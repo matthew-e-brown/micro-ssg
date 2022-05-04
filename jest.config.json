@@ -1,5 +1,5 @@
 {
-  "verbose": true,
+  "silent": true,
   "transform": {
     "^.+\\.ts$": "ts-jest"
   }

@@ -9,6 +9,9 @@ import { parse as parseYaml } from 'yaml';
 import { parseOptions, CompilerOptions, ParsedOptions } from '../lib/options';
 
 
+type Options = Omit<ParsedOptions, 'paths'>;
+
+
 function join(...paths: string[]): string {
     return path.join(...paths).replaceAll(/\\/g, '/');
 }
@@ -69,39 +72,13 @@ export async function compile(rootPath: string, compilerOptions?: CompilerOption
 
         // Attempt to compile the template
         const renderTemplate = Handlebars.compile(pageText);
-
-        // Find the matching data file, ensuring that there is only one
-        const dataPaths = await glob(join(paths.data, '*.{json,yml,yaml}'));
-
-        let foundData = false;
-        let data: object = { };
-        if (dataPaths.length > 1) {
-            throw new Error(`Found more than one data file for page '${pageName}'`);
-        } else if (dataPaths.length < 1 && options.log) {
-            console.log(`Found no data file for page '${pageName}'; will attempt to render page without data.`);
-        } else {
-            foundData = true;
-            const dataPath = dataPaths[0];
-            const dataText = await readFileToString(dataPath);
-
-            const { ext } = path.parse(dataPath);
-
-            switch (ext.toLowerCase()) {
-                case 'json':
-                    data = JSON.parse(dataText);
-                    break;
-                case 'yml':
-                case 'yaml':
-                    data = parseYaml(dataText);
-                    break;
-            }
-        }
+        const data = await getData(paths.data, pageName, options);
 
         try {
-            const output = renderTemplate(data);
+            const output = renderTemplate(data ?? { });
             renders.set(pageName, output);
         } catch (err) {
-            if (!foundData)
+            if (data === undefined)
                 throw new Error(`Could not render page '${pageName}', likely due to missing data.`);
             else
                 throw new Error(`An error occurred while rendering page '${pageName}':\n${err}`);
@@ -152,7 +129,40 @@ async function registerPartials(partialsPath: string, pageText: string): Promise
 }
 
 
-async function ensureCleanDist(distPath: string, options: Omit<ParsedOptions, 'paths'>): Promise<void> {
+async function getData(dataPath: string, pageName: string, options: Options): Promise<object | undefined> {
+    // Find the matching data file, ensuring that there is only one
+    const dataPaths = await glob(join(dataPath, `${pageName}.{json,yml,yaml}`));
+
+    let data: object | undefined = undefined;
+    if (dataPaths.length > 1) {
+        throw new Error(`Found more than one data file for page '${pageName}'`);
+    } else if (dataPaths.length < 1 && options.log) {
+        console.log(`Found no data file for page '${pageName}'; will attempt to render page without data.`);
+    } else {
+        const dataPath = dataPaths[0];
+        const dataText = await readFileToString(dataPath);
+
+        const { ext } = path.parse(dataPath);
+
+        switch (ext.toLowerCase()) {
+            case '.json':
+                data = JSON.parse(dataText);
+                break;
+            case '.yml':
+            case '.yaml':
+                data = parseYaml(dataText);
+                break;
+        }
+
+        if (options.log)
+            console.log(`Parsed data for ${pageName}:`, data);
+    }
+
+    return data;
+}
+
+
+async function ensureCleanDist(distPath: string, options: Options): Promise<void> {
     try {
         const fileNames = await readdir(distPath);
 
