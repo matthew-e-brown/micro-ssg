@@ -1,11 +1,17 @@
 import path from 'path';
-import { readFile } from 'fs/promises';
+import { isNativeError } from 'util/types';
+import { readFile, writeFile, readdir, mkdir, rm } from 'fs/promises';
 
 import glob from 'glob-promise';
 import Handlebars from 'handlebars';
 import { parse as parseYaml } from 'yaml';
 
-import { parseOptions, CompilerOptions } from '../lib/options';
+import { parseOptions, CompilerOptions, ParsedOptions } from '../lib/options';
+
+
+function join(...paths: string[]): string {
+    return path.join(...paths).replaceAll(/\\/g, '/');
+}
 
 
 async function readFileToString(path: string): Promise<string> {
@@ -29,25 +35,31 @@ export async function compile(rootPath: string, compilerOptions?: CompilerOption
     }
 
     // Start by finding all helpers and registering them
-    const helperPaths = await glob(path.join(paths.helpers, '*.{ts,js}'));
+    const helperPaths = await glob(join(paths.helpers, '*.{ts,js}'));
+
     for (const helperPath of helperPaths) {
         const basename = path.basename(helperPath);
         const { name } = path.parse(helperPath);
 
         try {
+            if (options.log)
+                console.log('Importing and registering helper', helperPath);
+
             const { default: func } = await import(helperPath);
             Handlebars.registerHelper(name, func);
-        } catch (error) {
+        } catch (err) {
             if (options.log)
-                console.error(error);
+                console.error(err);
 
             // Reword error message
-            throw new Error(`Unable to import helper '${basename}', likely due to compiler error:\n${error}`);
+            throw new Error(`Unable to import helper '${basename}', likely due to compiler error:\n${err}`);
         }
     }
 
     // Render the pages
-    const pagePaths = await glob(path.join(paths.pages, '*.{hbs,handlebars}'));
+    const renders = new Map<string, string>();
+    const pagePaths = await glob(join(paths.pages, '*.{hbs,handlebars}'));
+
     for (const pagePath of pagePaths) {
         const { name: pageName } = path.parse(pagePath);
 
@@ -59,7 +71,7 @@ export async function compile(rootPath: string, compilerOptions?: CompilerOption
         const renderTemplate = Handlebars.compile(pageText);
 
         // Find the matching data file, ensuring that there is only one
-        const dataPaths = await glob(path.join(paths.data, '*.{json,yml,yaml}'));
+        const dataPaths = await glob(join(paths.data, '*.{json,yml,yaml}'));
 
         let foundData = false;
         let data: object = { };
@@ -68,24 +80,44 @@ export async function compile(rootPath: string, compilerOptions?: CompilerOption
         } else if (dataPaths.length < 1 && options.log) {
             console.log(`Found no data file for page '${pageName}'; will attempt to render page without data.`);
         } else {
-            const dataPath = dataPaths[0];
             foundData = true;
-            data = parseYaml(await readFileToString(dataPath), {  });
+            const dataPath = dataPaths[0];
+            const dataText = await readFileToString(dataPath);
+
+            const { ext } = path.parse(dataPath);
+
+            switch (ext.toLowerCase()) {
+                case 'json':
+                    data = JSON.parse(dataText);
+                    break;
+                case 'yml':
+                case 'yaml':
+                    data = parseYaml(dataText);
+                    break;
+            }
         }
 
-        let outputText: string;
         try {
-            outputText = renderTemplate(data);
-        } catch (error) {
+            const output = renderTemplate(data);
+            renders.set(pageName, output);
+        } catch (err) {
             if (!foundData)
                 throw new Error(`Could not render page '${pageName}', likely due to missing data.`);
             else
-                throw new Error(`An error occurred while rendering page '${pageName}':\n${error}`);
+                throw new Error(`An error occurred while rendering page '${pageName}':\n${err}`);
         }
-
-        console.log(outputText);
     }
 
+    // Now that they're *all* rendered, wipe `dist` and output files
+    await ensureCleanDist(options.dist, options);
+    await Promise.all(Array.from(renders).map(([ pageName, pageText ]) => {
+        const finalPath = join(options.dist, `${pageName}.html`);
+
+        if (options.log)
+            console.log('Writing file to', finalPath);
+
+        return writeFile(finalPath, pageText, { encoding: 'utf-8' });
+    }));
 }
 
 
@@ -100,7 +132,7 @@ async function registerPartials(partialsPath: string, pageText: string): Promise
         // Only add this partial if it has not already been registered
         if (!(name in Handlebars.partials)) {
             // Glob the folder to find either `.hbs` or `.handlebars` files
-            const possible = await glob(path.join(partialsPath, `${name}.{hbs,handlebars}`));
+            const possible = await glob(join(partialsPath, `${name}.{hbs,handlebars}`));
 
             // Ensure we have exactly one match
             if (possible.length < 1) {
@@ -115,6 +147,35 @@ async function registerPartials(partialsPath: string, pageText: string): Promise
             // Register all the partials that that partial uses, then register this one
             await registerPartials(partialsPath, partialText);
             Handlebars.registerPartial(name, partialText);
+        }
+    }
+}
+
+
+async function ensureCleanDist(distPath: string, options: Omit<ParsedOptions, 'paths'>): Promise<void> {
+    try {
+        const fileNames = await readdir(distPath);
+
+        if (options.log)
+            console.log('Clearing the following files:', fileNames);
+
+        if (fileNames.length > 0) {
+            if (!options.overwrite) {
+                const distName = path.basename(distPath);
+                throw new Error(`Output directory ${distName} not empty: try setting overwrite to true.`);
+            } else {
+                await Promise.all(fileNames.map(fileName => {
+                    const filePath = join(distPath, fileName);
+                    return rm(filePath, { recursive: true });
+                }));
+            }
+        }
+    } catch (err: unknown) {
+        if (isNativeError(err) && (err as NodeJS.ErrnoException).code == 'ENOENT') {
+            if (options.log)
+                console.log('Could not clear directory; does not exist. Making directory.');
+
+            await mkdir(distPath, { recursive: true });
         }
     }
 }

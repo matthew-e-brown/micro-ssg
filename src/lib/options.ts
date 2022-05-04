@@ -12,7 +12,7 @@ export interface CompilerOptions {
      */
     log?: boolean,
     /**
-     * Whether or not files should be replaced upon re-running.
+     * Whether or not the `dist` directory should be replaced upon re-running.
      * @default false
      */
     overwrite?: boolean,
@@ -51,7 +51,7 @@ type RequiredPaths = AllRequired<CompilerOptions['paths']>;
 // Make all fields on the CompilerOptions type have no undefined or optional values. Requires
 // cutting out the 'paths' and re-intersecting, since it's nested. `tsConfigPath` is always
 // optional.
-type FilledOptions = Omit<AllRequired<CompilerOptions>, 'paths' | 'tsConfigPath'>
+export type ParsedOptions = Omit<AllRequired<CompilerOptions>, 'paths' | 'tsConfigPath'>
     & { paths: RequiredPaths, tsConfigPath?: string };
 
 
@@ -62,7 +62,7 @@ type FilledOptions = Omit<AllRequired<CompilerOptions>, 'paths' | 'tsConfigPath'
  * @param options The options to parse to their default values.
  * @returns The newly populated-with-default-values `options` object.
  */
-export function parseOptions(rootPath: string, options?: CompilerOptions): FilledOptions {
+export function parseOptions(rootPath: string, options?: CompilerOptions): ParsedOptions {
     // All non-nested options
     const {
         dist = 'dist',
