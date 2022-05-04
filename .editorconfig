@@ -10,5 +10,5 @@ indent_style = space
 charset = utf-8
 indent_size = 4
 
-[lib/**.js,{package.json,package-lock.json}]
+[{lib/**.js,*.json}]
 indent_size = 2

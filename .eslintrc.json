@@ -1,0 +1,21 @@
+{
+    "root": true,
+    "parser": "@typescript-eslint/parser",
+    "plugins": [
+      "@typescript-eslint"
+    ],
+    "extends": [
+      "eslint:recommended",
+      "plugin:@typescript-eslint/recommended"
+    ],
+    "rules": {
+      // General Style
+      "semi": [ "error", "always" ],
+      "indent": [ "warn", 4 ],
+      "eol-last": "warn",
+      "linebreak-style": [ "error", "unix" ],
+      "no-trailing-spaces": [ "error", { "ignoreComments": true } ],
+      // TypeScript
+      "@typescript-eslint/explicit-function-return-type": "error"
+    }
+}
