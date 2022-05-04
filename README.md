@@ -10,21 +10,22 @@ Create a directory structure that looks like
 src
 ├─ pages
 │  ├─ anything.{handlebars,hbs}
-│  ├─ anything-else.{handlebars,hbs}
-│  └─ ...
+│  └─ anything-else.{handlebars,hbs}
 ├─ data
 │  ├─ anything.{json,yaml,yml}
-│  ├─ anything-else.{json,yaml,yml}
-│  └─ ...
+│  └─ anything-else.{json,yaml,yml}
 ├─ partials
+│  └─ whatever.{handlebars,hbs}
 └─ helpers
+   └─ doStuff.{js,ts}
 ```
 
 and you're good to go. Every Handlebars file inside the `pages` directory gets
 its own `.html` file output, using either a YAML or a JSON file of the same name
 from the `data` directory to populate the page. Each file is scanned for
-partials (`{{> partial-name` in the Handlebars source) before compiling and
-included simply by looking for `partials/${partial-name}.hbs`.
+partials (by looking for `{{> partial-name` in the Handlebars source) before
+they are compiled and included by looking for their name in the partials folder:
+`partials/${partial-name}.hbs`.
 
 The `helpers` directory lets you write `.js` files to be used as helpers. They
 should contain a function as their default export, and return strings; they are
@@ -57,8 +58,8 @@ export default function(aString) {
 
 // In a file called 'helpers/list.js':
 export default function(items, options) {
-    const itemsAsHtml = items.map(item => `<li>${ options.fn(item) }</li>`);
-    return `<ul>${ itemsAsHtml.join('\n') }</ul>`;
+    const itemsAsHtml = items.map(item => `<li>${options.fn(item)}</li>`);
+    return `<ul>${itemsAsHtml.join('\n')}</ul>`;
 }
 ```
 
@@ -80,7 +81,7 @@ time):
 import { HelperOptions } from 'micro-ssg';
 
 export default function(this: any, options: HelperOptions) {
-    return `<em>${ options.fn(this) }</em>`;
+    return `<em>${options.fn(this)}</em>`;
 }
 ```
 
