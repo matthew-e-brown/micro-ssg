@@ -14,7 +14,9 @@
   },
   "main": "dist/lib/index.js",
   "files": [
-    "lib/**/*"
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
   ],
   "bin": "./bin/index.js",
   "scripts": {
