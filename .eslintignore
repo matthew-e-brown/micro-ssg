@@ -1,3 +1,5 @@
 /bin/
 /dist/
 /tests/**/helpers
+
+/post-build.js

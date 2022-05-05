@@ -19,8 +19,9 @@
     "LICENSE"
   ],
   "bin": "./bin/index.js",
+  "types": "./dist/lib/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node post-build.js",
     "test": "jest"
   },
   "keywords": [
