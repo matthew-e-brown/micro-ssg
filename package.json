@@ -1,33 +1,36 @@
 {
   "name": "micro-ssg",
-  "description": "A microscopic, static-site generating 'framework' that wraps Handlebars.",
+  "description": "Tiny little Handlebars compiler for building the simplest of static sites.",
   "author": {
     "name": "Matthew Brown",
     "email": "matthew.e.brown.17@gmail.com",
     "url": "https://matthew-brown.net"
   },
   "license": "Apache-2.0",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/matthew-e-brown/micro-ssg.git"
   },
-  "main": "dist/lib/index.js",
   "files": [
     "dist/**/*",
     "README.md",
     "LICENSE"
   ],
   "bin": "./bin/index.js",
+  "main": "dist/lib/index.js",
   "types": "./dist/lib/index.d.ts",
   "scripts": {
+    "clean": "rm -rf dist || rm -rf dist/**/*",
     "build": "tsc && node post-build.js",
+    "pre-pub": "npm run clean && npm run build",
     "test": "jest"
   },
   "keywords": [
     "ssg",
     "static site generator",
-    "handlebars"
+    "handlebars",
+    "cli"
   ],
   "devDependencies": {
     "@types/glob": "^7.2.0",
