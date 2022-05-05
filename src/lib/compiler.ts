@@ -1,6 +1,6 @@
 import path from 'path';
 import { isNativeError } from 'util/types';
-import { readFile, writeFile } from 'fs/promises';
+import { mkdir, readFile, writeFile } from 'fs/promises';
 
 import glob from 'glob-promise';
 import Handlebars from 'handlebars';
@@ -118,14 +118,29 @@ export async function compile(srcPath: string, compilerOptions?: Partial<Compile
             renders.set(pageName, output);
         } catch (err) {
             const msg = err instanceof Error ? err.message : err;
-            if (pageData === undefined)
-                throw new Error(`Could not render page '${pageName}', likely due to missing data:\n${msg}`);
-            else
-                throw new Error(`An error occurred while rendering page '${pageName}':\n${msg}`);
+            throw new Error(`An error occurred while rendering page '${pageName}':\n${msg}`);
         }
     }
 
-    // Now that they're *all* rendered, wipe `dist` and output files
+    // -----------------
+    // Done! Output!
+    // -----------------
+
+    // Make destination directory
+    try {
+        await mkdir(options.dest, { recursive: true });
+    } catch (err: unknown) {
+        if (isNativeError(err)) {
+            const message = typeof (err as NodeJS.ErrnoException).code == 'string'
+                ? `Could not create destination directory: ${(err as NodeJS.ErrnoException).code}`
+                : `Could not create destination directory: ${err.message}`;
+            throw new Error(message);
+        } else {
+            throw err;
+        }
+    }
+
+    // Write files
     await Promise.all(Array.from(renders).map(async ([ pageName, pageText ]) => {
         const finalPath = join(options.dest, `${pageName}.html`);
 
@@ -151,7 +166,7 @@ export async function compile(srcPath: string, compilerOptions?: Partial<Compile
 async function registerPartials(partialsPath: string, pageText: string): Promise<void> {
     // Regex matches the first word after the opening bracket of each partial, but not if preceded
     // by a quote. Just so we don't have false alarms on `{{> partial arg="value, {{>" }}`
-    const matches = pageText.matchAll(/(?<!["'`]){{>\s*(\w+)/gm);
+    const matches = pageText.matchAll(/(?<!["'`]){{>\s*([^\s}]+)/gm);
 
     for (const [, capture ] of matches) {
         const name = capture.trim();
