@@ -183,20 +183,19 @@ async function getData(dataPath: string, pageName: string, options: CompilerOpti
     // Find the matching data file, ensuring that there is only one
     const filePaths = await glob(join(dataPath, `${pageName}.{json,yml,yaml,md,markdown}`));
 
-    let data: object | undefined = undefined;
-    if (filePaths.length > 1) {
-        throw new Error(`Found more than one data file for '${pageName}'.`);
+    if (filePaths.length == 0) {
+        return;
+    } else if (filePaths.length == 1) {
+        const file = filePaths[0];
+        const text = await readFileToString(file);
+        const data = parseData(text, path.parse(file).ext);
+
+        if (options.log) console.log(`Parsed data for ${pageName}:`, data);
+
+        return data;
     } else {
-        const filePath = filePaths[0];
-        const dataText = await readFileToString(filePath);
-
-        data = parseData(dataText, path.parse(filePath).ext);
-
-        if (options.log)
-            console.log(`Parsed data for ${pageName}:`, data);
+        throw new Error(`Found more than one data file for '${pageName}'.`);
     }
-
-    return data;
 }
 
 
