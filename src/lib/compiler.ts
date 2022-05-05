@@ -5,6 +5,7 @@ import { readFile, writeFile } from 'fs/promises';
 import glob from 'glob-promise';
 import Handlebars from 'handlebars';
 import { parse as parseYaml } from 'yaml';
+import { marked as parseMarkdown } from 'marked';
 
 import { defaultOptions, CompilerOptions } from './options';
 
@@ -57,8 +58,10 @@ export async function compile(srcPath: string, compilerOptions?: Partial<Compile
     }
 
     // Start by finding all helpers and registering them
-    const tsHelpers = await glob(join(paths.helpers, '*.ts'));
-    const jsHelpers = await glob(join(paths.helpers, '*.js'));
+    const [ tsHelpers, jsHelpers ] = await Promise.all([
+        glob(join(paths.helpers, '*.ts')),
+        glob(join(paths.helpers, '*.js')),
+    ]);
 
     if (!tsEnabled && tsHelpers.length > 0) {
         const message =
@@ -90,13 +93,15 @@ export async function compile(srcPath: string, compilerOptions?: Partial<Compile
         }
     }
 
-    // Render the pages
-    const renders = new Map<string, string>();
+    // Read shared data and render the pages
+    const sharedData = await getData(paths.data, '_shared', options);
     const pagePaths = await glob(join(paths.pages, '*.{hbs,handlebars}'));
 
     if (pagePaths.length < 1)
         throw new Error("Found no pages to compile");
 
+
+    const renders = new Map<string, string>();
     for (const pagePath of pagePaths) {
         const { name: pageName } = path.parse(pagePath);
 
@@ -106,16 +111,17 @@ export async function compile(srcPath: string, compilerOptions?: Partial<Compile
 
         // Attempt to compile the template
         const renderTemplate = Handlebars.compile(pageText);
-        const data = await getData(paths.data, pageName, options);
+        const pageData = await getData(paths.data, pageName, options);
 
         try {
-            const output = renderTemplate(data ?? { });
+            const output = renderTemplate({ _shared: { ...sharedData }, ...pageData });
             renders.set(pageName, output);
         } catch (err) {
-            if (data === undefined)
-                throw new Error(`Could not render page '${pageName}', likely due to missing data.`);
+            const msg = err instanceof Error ? err.message : err;
+            if (pageData === undefined)
+                throw new Error(`Could not render page '${pageName}', likely due to missing data:\n${msg}`);
             else
-                throw new Error(`An error occurred while rendering page '${pageName}':\n${err}`);
+                throw new Error(`An error occurred while rendering page '${pageName}':\n${msg}`);
         }
     }
 
@@ -175,32 +181,44 @@ async function registerPartials(partialsPath: string, pageText: string): Promise
 
 async function getData(dataPath: string, pageName: string, options: CompilerOptions): Promise<object | undefined> {
     // Find the matching data file, ensuring that there is only one
-    const dataPaths = await glob(join(dataPath, `${pageName}.{json,yml,yaml}`));
+    const filePaths = await glob(join(dataPath, `${pageName}.{json,yml,yaml,md,markdown}`));
 
     let data: object | undefined = undefined;
-    if (dataPaths.length > 1) {
-        throw new Error(`Found more than one data file for page '${pageName}'.`);
-    } else if (dataPaths.length < 1 && options.log) {
-        console.log(`Found no data file for page '${pageName}'; will attempt to render page without data.`);
+    if (filePaths.length > 1) {
+        throw new Error(`Found more than one data file for '${pageName}'.`);
     } else {
-        const dataPath = dataPaths[0];
-        const dataText = await readFileToString(dataPath);
+        const filePath = filePaths[0];
+        const dataText = await readFileToString(filePath);
 
-        const { ext } = path.parse(dataPath);
-
-        switch (ext.toLowerCase()) {
-            case '.json':
-                data = JSON.parse(dataText);
-                break;
-            case '.yml':
-            case '.yaml':
-                data = parseYaml(dataText);
-                break;
-        }
+        data = parseData(dataText, path.parse(filePath).ext);
 
         if (options.log)
             console.log(`Parsed data for ${pageName}:`, data);
     }
 
     return data;
+}
+
+
+function parseData(rawData: string, extension: string): object {
+    switch (extension.toLowerCase()) {
+        case '.json':
+            return JSON.parse(rawData);
+        case '.yml':
+        case '.yaml':
+            return parseYaml(rawData);
+        case '.md':
+        case '.markdown':
+            return {
+                _md: parseMarkdown(rawData, {
+                    gfm: true,
+                    breaks: true,
+                    smartLists: true,
+                    headerIds: true,
+                    xhtml: true,
+                }).trim(),
+            };
+        default:
+            return { };
+    }
 }
