@@ -2,6 +2,7 @@
 
 A microscopic, static-site generating "framework" that wraps Handlebars.
 
+
 ## Usage
 
 Create a directory structure that looks like
@@ -21,11 +22,26 @@ src
 ```
 
 and you're good to go. Every Handlebars file inside the `pages` directory gets
-its own `.html` file output, using either a YAML or a JSON file of the same name
-from the `data` directory to populate the page. Each file is scanned for
-partials (by looking for `{{> partial-name` in the Handlebars source) before
-they are compiled and included by looking for their name in the partials folder:
-`partials/${partial-name}.hbs`.
+its own `.html` file output, feeding the files of the same name from the `data`
+directory to Handlebars to generate them. Partials are automatically registered
+with Handlebars while before rendering by scanning the `partials` folder for
+them by name (i.e. referencing `{{> subsection }}` will look for
+`partials/subsection.hbs`).
+
+
+### Data
+
+Data files may be either in YAML (`.yml`, `.yaml`), JSON (`.json`), or Markdown
+(`.md`. `.markdown`) format. YAML and JSON are passed directly to the Handlebars
+compiler as input objects; Markdown is rendered to HTML and passed on the input
+object as `_md`.
+
+If you create a data file with the name `_shared`, it will be parsed exactly as
+all the other data files, with its contents being made available underneath the
+nested `_shared` object.
+
+
+### Helpers
 
 The `helpers` directory lets you write `.js` files to be used as helpers. They
 should contain a function as their default export, and return strings; they are
@@ -64,7 +80,7 @@ export default function(items, options) {
 ```
 
 
-### TypeScript Helpers
+#### TypeScript Helpers
 
 You can also enable support for `.ts` helper files by passing a path to a
 `tsconfig.json` file to the compiler, and making sure you have `ts-node`
