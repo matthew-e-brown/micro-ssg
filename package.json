@@ -17,9 +17,9 @@
     "README.md",
     "LICENSE"
   ],
-  "bin": "./bin/index.js",
-  "main": "dist/lib/index.js",
-  "types": "./dist/lib/index.d.ts",
+  "bin": "bin/index.js",
+  "main": "dist/lib.js",
+  "types": "dist/lib.d.ts",
   "scripts": {
     "clean": "rm -rf dist || rm -rf dist/**/*",
     "build": "tsc && node post-build.js",

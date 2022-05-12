@@ -3,8 +3,8 @@ import { homedir } from 'os';
 
 import { program } from 'commander';
 
-import { compile } from '../lib/compiler';
-import { defaultOptions } from '../lib/compiler';
+import { compile } from './lib';
+import { defaultOptions } from './lib';
 
 // --------------------------------------------------------
 
