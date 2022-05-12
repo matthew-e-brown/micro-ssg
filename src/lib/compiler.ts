@@ -7,17 +7,76 @@ import Handlebars from 'handlebars';
 import { parse as parseYaml } from 'yaml';
 import { marked as parseMarkdown } from 'marked';
 
-import { defaultOptions, CompilerOptions } from './options';
 
+export { HelperOptions } from 'handlebars'; // re-export for consumer
+
+
+// ===============================================================================================
+// Types and options
+// ===============================================================================================
 
 export type PostBuildHelper = (pageName: string, pageHtml: string) => Promise<string> | PromiseLike<string> | string;
 
+export interface CompilerOptions {
+    /**
+     * The directory that the HTML files should be written to.
+    * @default 'dist'
+     */
+    dest: string,
+    /**
+     * Whether or not the compiler should output to the console.
+     * @default false
+     */
+    log: boolean,
+    /**
+     * Whether or not the `dist` directory should be replaced upon re-running.
+     * @default false
+     */
+    overwrite: boolean,
+    /**
+     * Whether or not the final HTML should be minified or not.
+     * @default false
+     */
+    minify: boolean,
+    /**
+     * A path pointing to a TypeScript config file, or to a directory containing a `tsconfig.json`.
+     * Will be passed to `ts-node`.
+     */
+    tsConfigPath?: string,
+    /**
+     * Pages to exclude from the compilation.
+     * @default []
+     * */
+    exclude: string[],
+}
 
+
+export const defaultOptions: CompilerOptions = {
+    dest: 'dist',
+    overwrite: false,
+    minify: false,
+    log: false,
+    exclude: [ ],
+};
+
+
+// ===============================================================================================
+// Compiler
+// ===============================================================================================
+
+
+/**
+ * A wrapper for `path.join` that ensures no Windows backslashes appear in the path, since `glob`
+ * doesn't like them.
+ */
 function join(...paths: string[]): string {
     return path.join(...paths).replace(/\\/g, '/');
 }
 
 
+/**
+ * Wraps `fs/promises.readFile` with an extra call to `toString`.
+ */
 async function readFileToString(path: string): Promise<string> {
     const buffer = await readFile(path);
     return buffer.toString();
@@ -189,6 +248,11 @@ export async function compile(srcPath: string, compilerOptions?: Partial<Compile
         }
     }));
 }
+
+
+// ---------------------------------
+// Handlebars helpers
+// ---------------------------------
 
 
 async function registerPartials(partialsPath: string, pageText: string): Promise<void> {
