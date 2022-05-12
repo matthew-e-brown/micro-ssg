@@ -10,6 +10,9 @@ import { marked as parseMarkdown } from 'marked';
 import { defaultOptions, CompilerOptions } from './options';
 
 
+export type PostBuildHelper = (pageName: string, pageHtml: string) => Promise<string> | PromiseLike<string> | string;
+
+
 function join(...paths: string[]): string {
     return path.join(...paths).replace(/\\/g, '/');
 }
@@ -36,7 +39,7 @@ export async function compile(srcPath: string, compilerOptions?: Partial<Compile
         ...compilerOptions,
     };
 
-    //
+    // Prepend each of the directories with the `srcPath`
     type Paths = Record<'pages' | 'data' | 'partials' | 'helpers', string>;
     const paths: Paths = [ 'pages', 'data', 'partials', 'helpers' ]
         .reduce((acc, cur) => ({
@@ -57,10 +60,12 @@ export async function compile(srcPath: string, compilerOptions?: Partial<Compile
         }
     }
 
-    // Start by finding all helpers and registering them
+    // Start by finding all helpers and registering them (ignore the ones that start with '_')
     const [ tsHelpers, jsHelpers ] = await Promise.all([
-        glob(join(paths.helpers, '*.ts')),
-        glob(join(paths.helpers, '*.js')),
+        glob(join(paths.helpers, '*.ts'))
+            .then(p => p.filter(file => !path.basename(file).startsWith('_'))),
+        glob(join(paths.helpers, '*.js'))
+            .then(p => p.filter(file => !path.basename(file).startsWith('_'))),
     ]);
 
     if (!tsEnabled && tsHelpers.length > 0) {
@@ -119,6 +124,29 @@ export async function compile(srcPath: string, compilerOptions?: Partial<Compile
         } catch (err) {
             const msg = err instanceof Error ? err.message : err;
             throw new Error(`An error occurred while rendering page '${pageName}':\n${msg}`);
+        }
+    }
+
+    // Try and import a helper
+    let postBuildHelper: PostBuildHelper | undefined = undefined;
+    try {
+        const fileName = tsEnabled ? '_post-build.js' : '_post-build.ts';
+        const helper = await import(path.join(paths.helpers, fileName));
+        postBuildHelper = helper.default;
+    } catch (err: unknown) {
+        if (options.log)
+            console.log(`Could not import post-build helper, continuing without.`);
+    }
+
+    if (postBuildHelper !== undefined) {
+        for (const [ pageName, pageContent ] of renders) {
+            try {
+                // Re-set the render with the output from the postBuild helper
+                renders.set(pageName, await postBuildHelper(pageName, pageContent));
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : err;
+                throw new Error(`An error occurred running the post-build helper on page '${pageName}':\n${msg}`);
+            }
         }
     }
 
