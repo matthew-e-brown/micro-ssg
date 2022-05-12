@@ -8,16 +8,15 @@ import { parse as parseYaml } from 'yaml';
 import { marked as parseMarkdown } from 'marked';
 
 
-export { HelperOptions } from 'handlebars'; // re-export for consumer
-
 
 // ===============================================================================================
 // Types and options
 // ===============================================================================================
 
-export type PostBuildHelper = (pageName: string, pageHtml: string) => Promise<string> | PromiseLike<string> | string;
 
-export interface CompilerOptions {
+type PostBuildHelper = (pageName: string, pageHtml: string) => Promise<string> | PromiseLike<string> | string;
+
+interface CompilerOptions {
     /**
      * The directory that the HTML files should be written to.
     * @default 'dist'
@@ -51,13 +50,14 @@ export interface CompilerOptions {
 }
 
 
-export const defaultOptions: CompilerOptions = {
+const defaultOptions: CompilerOptions = {
     dest: 'dist',
     overwrite: false,
     minify: false,
     log: false,
     exclude: [ ],
 };
+
 
 
 // ===============================================================================================
@@ -90,7 +90,7 @@ async function readFileToString(path: string): Promise<string> {
  * `helpers` directories to compile.
  * @param compilerOptions Options.
  */
-export async function compile(srcPath: string, compilerOptions?: Partial<CompilerOptions>): Promise<void> {
+async function compile(srcPath: string, compilerOptions?: Partial<CompilerOptions>): Promise<void> {
 
     // Merge their passed options with the defaults
     const options: CompilerOptions = {
@@ -328,3 +328,12 @@ function parseData(rawData: string, extension: string): object {
             return { };
     }
 }
+
+
+// =================================
+// Exports
+// =================================
+
+export { HelperOptions } from 'handlebars'; // re-export for consumer
+export { CompilerOptions, PostBuildHelper };
+export { compile, defaultOptions };
