@@ -190,7 +190,7 @@ async function compile(srcPath: string, compilerOptions?: Partial<CompilerOption
     let postBuildHelper: PostBuildHelper | undefined = undefined;
     try {
         const fileName = tsEnabled ? '_post-build.js' : '_post-build.ts';
-        const helper = await import(path.join(paths.helpers, fileName));
+        const helper = await import(path.join(srcPath, fileName));
         postBuildHelper = helper.default;
     } catch (err: unknown) {
         if (options.log)
@@ -317,11 +317,9 @@ function parseData(rawData: string, extension: string): object {
         case '.markdown':
             return {
                 _md: parseMarkdown(rawData, {
-                    gfm: true,
-                    breaks: true,
                     smartLists: true,
                     headerIds: true,
-                    xhtml: true,
+                    gfm: true,
                 }).trim(),
             };
         default:
