@@ -141,8 +141,8 @@ export default function(this: any, options: HelperOptions) {
 I'm writing this for use with my resume and my personal site, since neither one
 needs to be more complication that static HTML, but it would be nice to use
 partials and template them off a data-file. This package is based off of a janky
-[compiler script][resume-script] that I am/was using for my resume.
+[compiler script][janky-script] that I used to use for my resume.
 
 
-[resume-script]: https://github.com/matthew-e-brown/resume/blob/8ba7903a0178b799c3b4b1e60a68052eca82f3d1/compile.ts
 [hbs-guide]: https://handlebarsjs.com/guide/
+[janky-script]: https://github.com/matthew-e-brown/resume/blob/ff5bfdd0400b2d2f4878ae86cbceecc19d8aa0a3/compile.ts
