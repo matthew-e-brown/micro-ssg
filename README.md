@@ -79,6 +79,38 @@ export default function(items, options) {
 }
 ```
 
+Any `.js`<sup>[`[*]`](#typescript-helpers)</sup> file in the `helpers` directory
+are imported and registered with Handlebars automatically; however, you can tell
+Micro SSG to skip a specific helper by starting its name with an underscore. For
+example, say you have a module in `helpers` that contains some common functions:
+
+```
+src
+├─ pages
+│  ├─ index.hbs
+│  └─ about.hbs
+└─ helpers
+   ├─ _common-functions.js
+   ├─ helper1.js
+   ├─ helper2.js
+   └─ helper3.js
+```
+
+
+#### Post-build Helper
+
+If you place a file called `_post-build.js` or `_post-build.ts` inside the `src`
+directory, its default export will be used to mutate the body of the rendered
+HTML once Handlebars is finished rendering them. The function signature for the
+file's default export should be as follows:
+
+```ts
+type PostBuildHelper = (
+    pageName: string,
+    pageHtml: string,
+) => Promise<string> | PromiseLike<string> | string;
+```
+
 
 #### TypeScript Helpers
 
