@@ -7,14 +7,76 @@ import Handlebars from 'handlebars';
 import { parse as parseYaml } from 'yaml';
 import { marked as parseMarkdown } from 'marked';
 
-import { defaultOptions, CompilerOptions } from './options';
 
 
+// ===============================================================================================
+// Types and options
+// ===============================================================================================
+
+
+type PostBuildHelper = (pageName: string, pageHtml: string) => Promise<string> | PromiseLike<string> | string;
+
+interface CompilerOptions {
+    /**
+     * The directory that the HTML files should be written to.
+    * @default 'dist'
+     */
+    dest: string,
+    /**
+     * Whether or not the compiler should output to the console.
+     * @default false
+     */
+    log: boolean,
+    /**
+     * Whether or not the `dist` directory should be replaced upon re-running.
+     * @default false
+     */
+    overwrite: boolean,
+    /**
+     * Whether or not the final HTML should be minified or not.
+     * @default false
+     */
+    minify: boolean,
+    /**
+     * A path pointing to a TypeScript config file, or to a directory containing a `tsconfig.json`.
+     * Will be passed to `ts-node`.
+     */
+    tsConfigPath?: string,
+    /**
+     * Pages to exclude from the compilation.
+     * @default []
+     * */
+    exclude: string[],
+}
+
+
+const defaultOptions: CompilerOptions = {
+    dest: 'dist',
+    overwrite: false,
+    minify: false,
+    log: false,
+    exclude: [ ],
+};
+
+
+
+// ===============================================================================================
+// Compiler
+// ===============================================================================================
+
+
+/**
+ * A wrapper for `path.join` that ensures no Windows backslashes appear in the path, since `glob`
+ * doesn't like them.
+ */
 function join(...paths: string[]): string {
     return path.join(...paths).replace(/\\/g, '/');
 }
 
 
+/**
+ * Wraps `fs/promises.readFile` with an extra call to `toString`.
+ */
 async function readFileToString(path: string): Promise<string> {
     const buffer = await readFile(path);
     return buffer.toString();
@@ -28,7 +90,7 @@ async function readFileToString(path: string): Promise<string> {
  * `helpers` directories to compile.
  * @param compilerOptions Options.
  */
-export async function compile(srcPath: string, compilerOptions?: Partial<CompilerOptions>): Promise<void> {
+async function compile(srcPath: string, compilerOptions?: Partial<CompilerOptions>): Promise<void> {
 
     // Merge their passed options with the defaults
     const options: CompilerOptions = {
@@ -36,13 +98,16 @@ export async function compile(srcPath: string, compilerOptions?: Partial<Compile
         ...compilerOptions,
     };
 
-    //
+    // Prepend each of the directories with the `srcPath`
     type Paths = Record<'pages' | 'data' | 'partials' | 'helpers', string>;
     const paths: Paths = [ 'pages', 'data', 'partials', 'helpers' ]
         .reduce((acc, cur) => ({
             ...acc,
             [cur]: join(srcPath, cur)
         }), { } as Paths);
+
+    if (options.log)
+        console.log(`Building from src directory '${srcPath}'.`);
 
     // Attempt to register `ts-node` as the default module-loader, for helpers later on
     let tsEnabled = false;
@@ -57,20 +122,29 @@ export async function compile(srcPath: string, compilerOptions?: Partial<Compile
         }
     }
 
-    // Start by finding all helpers and registering them
+    if (options.log) {
+        if (tsEnabled) console.log(`Successfully activate 'ts-node' for importing .ts helpers.`);
+        else console.log(`TypeScript helpers are disabled; will use .js helpers.`);
+    }
+
+    // Start by finding all helpers and registering them (ignore the ones that start with '_')
     const [ tsHelpers, jsHelpers ] = await Promise.all([
-        glob(join(paths.helpers, '*.ts')),
-        glob(join(paths.helpers, '*.js')),
+        glob(join(paths.helpers, '*.ts'))
+            .then(p => p.filter(file => !path.basename(file).startsWith('_'))),
+        glob(join(paths.helpers, '*.js'))
+            .then(p => p.filter(file => !path.basename(file).startsWith('_'))),
     ]);
 
     if (!tsEnabled && tsHelpers.length > 0) {
         const message =
             `Found TypeScript helpers in '${path.basename(srcPath)}/helpers', but TypeScript` +
             ` support was not enabled! Pass a path to a tsconfig to enable TypeScript support.`;
-        throw new Error(message);
+
+        // Just print, don't throw and stop running
+        console.error(message);
     }
 
-    const helperPaths = [ ...tsHelpers, ...jsHelpers ];
+    const helperPaths = [ ...jsHelpers, ...(tsEnabled ? tsHelpers : [ ]) ];
     for (const helperPath of helperPaths) {
         const basename = path.basename(helperPath);
         const { name } = path.parse(helperPath);
@@ -122,6 +196,38 @@ export async function compile(srcPath: string, compilerOptions?: Partial<Compile
         }
     }
 
+    // Try and import a helper
+    const [ jsPostBuild, tsPostBuild ] = await Promise.all([
+        glob(join(srcPath, '_post-build.js')),
+        glob(join(srcPath, '_post-build.ts')),
+    ]);
+
+    const helperCount = jsPostBuild.length + tsPostBuild.length;
+    if (helperCount > 1) {
+        throw new Error('Cannot use more than one _post-build helper: found JS and TS.');
+    } else if (helperCount == 1) {
+        const helperPath = [ ...jsPostBuild, ...tsPostBuild ][0];
+
+        let postBuildHelper: PostBuildHelper;
+        try {
+            const module = await import(helperPath);
+            postBuildHelper = module.default;
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : err;
+            throw new Error(`Could not import post-build helper:\n${msg}`);
+        }
+
+        for (const [ pageName, pageContent ] of renders) {
+            try {
+                // Re-set the render with the output from the postBuild helper
+                renders.set(pageName, await postBuildHelper(pageName, pageContent));
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : err;
+                throw new Error(`An error occurred running the post-build helper on page '${pageName}':\n${msg}`);
+            }
+        }
+    }
+
     // -----------------
     // Done! Output!
     // -----------------
@@ -161,6 +267,11 @@ export async function compile(srcPath: string, compilerOptions?: Partial<Compile
         }
     }));
 }
+
+
+// ---------------------------------
+// Handlebars helpers
+// ---------------------------------
 
 
 async function registerPartials(partialsPath: string, pageText: string): Promise<void> {
@@ -225,14 +336,21 @@ function parseData(rawData: string, extension: string): object {
         case '.markdown':
             return {
                 _md: parseMarkdown(rawData, {
-                    gfm: true,
-                    breaks: true,
                     smartLists: true,
                     headerIds: true,
-                    xhtml: true,
+                    gfm: true,
                 }).trim(),
             };
         default:
             return { };
     }
 }
+
+
+// =================================
+// Exports
+// =================================
+
+export { HelperOptions } from 'handlebars'; // re-export for consumer
+export { CompilerOptions, PostBuildHelper };
+export { compile, defaultOptions };

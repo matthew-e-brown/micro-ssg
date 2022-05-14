@@ -4,7 +4,7 @@ import path from 'path';
 import { tmpdir } from 'os';
 import { readFile, mkdtemp, rm } from 'fs/promises';
 
-import { compile } from '../src/lib/compiler';
+import { compile } from '../src/lib';
 
 
 let tempDir: string;
