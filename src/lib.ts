@@ -106,6 +106,9 @@ async function compile(srcPath: string, compilerOptions?: Partial<CompilerOption
             [cur]: join(srcPath, cur)
         }), { } as Paths);
 
+    if (options.log)
+        console.log(`Building from src directory '${srcPath}'.`);
+
     // Attempt to register `ts-node` as the default module-loader, for helpers later on
     let tsEnabled = false;
     if (options.tsConfigPath) {
@@ -117,6 +120,11 @@ async function compile(srcPath: string, compilerOptions?: Partial<CompilerOption
             // Reword error message
             throw new Error("Received tsConfigPath option, but failed to import 'ts-node'. Is it installed?");
         }
+    }
+
+    if (options.log) {
+        if (tsEnabled) console.log(`Successfully activate 'ts-node' for importing .ts helpers.`);
+        else console.log(`TypeScript helpers are disabled; will use .js helpers.`);
     }
 
     // Start by finding all helpers and registering them (ignore the ones that start with '_')
@@ -131,10 +139,12 @@ async function compile(srcPath: string, compilerOptions?: Partial<CompilerOption
         const message =
             `Found TypeScript helpers in '${path.basename(srcPath)}/helpers', but TypeScript` +
             ` support was not enabled! Pass a path to a tsconfig to enable TypeScript support.`;
-        throw new Error(message);
+
+        // Just print, don't throw and stop running
+        console.error(message);
     }
 
-    const helperPaths = [ ...tsHelpers, ...jsHelpers ];
+    const helperPaths = [ ...jsHelpers, ...(tsEnabled ? tsHelpers : [ ]) ];
     for (const helperPath of helperPaths) {
         const basename = path.basename(helperPath);
         const { name } = path.parse(helperPath);
@@ -187,17 +197,26 @@ async function compile(srcPath: string, compilerOptions?: Partial<CompilerOption
     }
 
     // Try and import a helper
-    let postBuildHelper: PostBuildHelper | undefined = undefined;
-    try {
-        const fileName = tsEnabled ? '_post-build.js' : '_post-build.ts';
-        const helper = await import(path.join(srcPath, fileName));
-        postBuildHelper = helper.default;
-    } catch (err: unknown) {
-        if (options.log)
-            console.log(`Could not import post-build helper, continuing without.`);
-    }
+    const [ jsPostBuild, tsPostBuild ] = await Promise.all([
+        glob(join(srcPath, '_post-build.js')),
+        glob(join(srcPath, '_post-build.ts')),
+    ]);
 
-    if (postBuildHelper !== undefined) {
+    const helperCount = jsPostBuild.length + tsPostBuild.length;
+    if (helperCount > 1) {
+        throw new Error('Cannot use more than one _post-build helper: found JS and TS.');
+    } else if (helperCount == 1) {
+        const helperPath = [ ...jsPostBuild, ...tsPostBuild ][0];
+
+        let postBuildHelper: PostBuildHelper;
+        try {
+            const module = await import(helperPath);
+            postBuildHelper = module.default;
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : err;
+            throw new Error(`Could not import post-build helper:\n${msg}`);
+        }
+
         for (const [ pageName, pageContent ] of renders) {
             try {
                 // Re-set the render with the output from the postBuild helper
