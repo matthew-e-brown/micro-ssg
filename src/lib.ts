@@ -143,12 +143,6 @@ async function compile(srcPath: string, compilerOptions?: Partial<CompilerOption
         const basename = path.basename(helperPath);
         const { name } = path.parse(helperPath);
 
-        if (options.exclude.some(exclude => exclude == name || exclude == basename)) {
-            if (options.log)
-                console.log(`Skipping ${basename}...`);
-            continue;
-        }
-
         try {
             if (options.log)
                 console.log('Importing and registering helper', helperPath);
@@ -172,6 +166,13 @@ async function compile(srcPath: string, compilerOptions?: Partial<CompilerOption
     const renders = new Map<string, string>();
     for (const pagePath of pagePaths) {
         const { name: pageName } = path.parse(pagePath);
+        const basename = path.basename(pagePath);
+
+        if (options.exclude.some(exclude => exclude == pageName || exclude == basename)) {
+            if (options.log)
+                console.log(`Skipping page ${pageName}...`);
+            continue;
+        }
 
         // Read page to a string and scan it for partials
         const pageText = await readFileToString(pagePath);
