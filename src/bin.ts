@@ -28,11 +28,6 @@ program
         defaultOptions.log
     )
     .option(
-        '-m, --minify',
-        'Minify the output HTML',
-        defaultOptions.minify
-    )
-    .option(
         '-f, --overwrite',
         'Truncate existing files when outputting',
         defaultOptions.overwrite

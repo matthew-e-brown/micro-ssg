@@ -33,11 +33,6 @@ interface CompilerOptions {
      */
     overwrite: boolean,
     /**
-     * Whether or not the final HTML should be minified or not.
-     * @default false
-     */
-    minify: boolean,
-    /**
      * A path pointing to a TypeScript config file, or to a directory containing a `tsconfig.json`.
      * Will be passed to `ts-node`.
      */
@@ -53,7 +48,6 @@ interface CompilerOptions {
 const defaultOptions: CompilerOptions = {
     dest: 'dist',
     overwrite: false,
-    minify: false,
     log: false,
     exclude: [ ],
 };
