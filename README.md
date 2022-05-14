@@ -79,8 +79,8 @@ export default function(items, options) {
 }
 ```
 
-Any `.js`<sup>[`[*]`](#typescript-helpers)</sup> file in the `helpers` directory
-are imported and registered with Handlebars automatically; however, you can tell
+Any `.js`<sup>[[*]](#typescript-helpers)</sup> files in the `helpers` directory
+are automatically imported and registered with Handlebars; however, you can tell
 Micro SSG to skip a specific helper by starting its name with an underscore. For
 example, say you have a module in `helpers` that contains some common functions:
 
@@ -95,6 +95,8 @@ src
    ├─ helper2.js
    └─ helper3.js
 ```
+
+The `_common-functions.js` module will not be imported.
 
 
 #### Post-build Helper
